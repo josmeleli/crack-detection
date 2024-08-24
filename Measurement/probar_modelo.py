@@ -20,7 +20,7 @@ model_path = 'C:/Users/USUARIO/Desktop/docmodelskaggle/SemanticSegmentationTrain
 model = load_model(model_path, custom_objects={'FixedDropout': FixedDropout}, compile=False)
 
 # Ruta de la imagen de prueba
-img_path = 'C:/Users/USUARIO/Desktop/Concrete-crack-detection/Images/_002.png'
+img_path = 'c:/Users/USUARIO/Documents/Segmentation/ejemplopostman.jpg'
 
 # Cargar y procesar la imagen
 img = load_img(img_path, target_size=(416, 416))  # Ajusta el tamaño si es necesario
@@ -40,7 +40,7 @@ plt.axis('off')
 plt.show()
 
 # Guardar la máscara como PNG
-output_path = 'C:/Users/USUARIO/Desktop/docmodelskaggle/SemanticSegmentationTrainEvalmixup/imagenesconmascara/predicted_mask_kaggle_local.png'
+output_path = 'C:/Users/USUARIO/Desktop/docmodelskaggle/SemanticSegmentationTrainEvalmixup/imagenesconmascara/predicted_mask_h5_2.png'
 plt.imsave(output_path, predicted_mask[0, :, :, 0], cmap='gray')
 
 print(f'La máscara predicha ha sido guardada en {output_path}')

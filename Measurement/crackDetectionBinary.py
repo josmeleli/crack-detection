@@ -119,7 +119,7 @@ def process_and_measure_crack(image_path, display_results=True):
 
 # USING THE FUNCTION
 # Specify the path to the input image
-input_image_path = 'C:/Users/USUARIO/Desktop/docmodelskaggle/SemanticSegmentationTrainEvalmixup/imagenesconmascara/predicted_mask_kaggle_local.png'
+input_image_path = 'C:/Users/USUARIO/Desktop/docmodelskaggle/SemanticSegmentationTrainEvalmixup/imagenesconmascara/predicted_mask_h5_2.png'
 
 # Process and measure crack width
 crack_widths, max_crack_width = process_and_measure_crack(input_image_path)
