@@ -1,3 +1,4 @@
+import tempfile
 from tensorflow.keras.models import load_model
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse
@@ -12,7 +13,10 @@ import tensorflow as tf
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 
 
-# Define la capa personalizada FixedDropout
+# Inicializa la aplicación FastAPI
+app = FastAPI()
+
+# Cargar el modelo con la capa personalizada
 class FixedDropout(tf.keras.layers.Dropout):
     def __init__(self, rate, noise_shape=None, seed=None, **kwargs):
         super(FixedDropout, self).__init__(rate, noise_shape, seed, **kwargs)
@@ -21,108 +25,54 @@ class FixedDropout(tf.keras.layers.Dropout):
         config = super(FixedDropout, self).get_config()
         return config
 
-# Especifica la ruta de tu modelo .h5
 model_path = 'C:/Users/USUARIO/Desktop/docmodelskaggle/SemanticSegmentationTrainEvalmixup/model_effnetB1_512pix_fold3_full_84283.h5'
-
-# Cargar el modelo con la capa personalizada
 model = load_model(model_path, custom_objects={'FixedDropout': FixedDropout}, compile=False)
 
-# Definir la función de medición de ancho de grieta
+# Función para medir el ancho de las grietas
 def crack_width_measure(binary_image):
-    """
-    Medir el ancho de la grieta a lo largo de su longitud en una imagen binaria.
-    
-    :param binary_image: Una matriz NumPy 2D que representa la imagen binaria (donde la grieta se representa como píxeles blancos).
-    :return: Una tupla que contiene una matriz de anchos de grieta y el ancho máximo de la grieta.
-    """
-    # Asegurando que la imagen utilizada sea una imagen binaria
     binary_image = binary_image > 0
-    
-    # Aplicando esqueletonización
     skeleton = morphology.skeletonize(binary_image)
-    
-    # Aplicando la transformación de distancia
     distance_transform = distance_transform_edt(binary_image)
-    
-    # Midiendo los anchos de la grieta a lo largo del esqueleto
     crack_widths = distance_transform[skeleton] * 2
-    
-    # Identificando el ancho máximo de la grieta en la imagen
     max_crack_width = np.max(crack_widths) if crack_widths.size > 0 else 0
-    
     return crack_widths, max_crack_width
 
-# Definir la aplicación FastAPI
-app = FastAPI()
+# Función para convertir la imagen a binaria y medir el ancho de la grieta
+def process_and_measure_crack(binary_image_array):
+    crack_widths, max_crack_width = crack_width_measure(binary_image_array)
+    return crack_widths, max_crack_width
 
-@app.post("/ancho-maximo-grieta/")
-async def measure_crack_width(file: UploadFile = File(...)):
-    # Leer el archivo de imagen
+# Endpoint POST para procesar la imagen
+@app.post("/predict/")
+async def predict(file: UploadFile = File(...)):
+    # Leer la imagen
     contents = await file.read()
-    image = Image.open(io.BytesIO(contents))
-    
-    # Preprocesar la imagen
-    img = image.resize((416, 416))  # Redimensionar si es necesario
-    img_array = img_to_array(img)
-    img_array = np.expand_dims(img_array, axis=0)  # Añadir una dimensión para el batch
+
+    # Crear un archivo temporal para usar con load_img
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_image:
+        temp_image.write(contents)
+        temp_image_path = temp_image.name
+
+    # Usar load_img para cargar la imagen desde el archivo temporal
+    image = load_img(temp_image_path, target_size=(416, 416))  # Ajusta el tamaño si es necesario
+
+    # Preprocesar la imagen para el modelo
+    img_array = img_to_array(image)
+    img_array = np.expand_dims(img_array, axis=0)
     img_array = img_array / 255.0  # Normalizar la imagen
-    
-    # Realizar la predicción
+
+    # Realizar la predicción de segmentación
     prediction = model.predict(img_array)
-    predicted_mask = (prediction > 0.5).astype(np.uint8)[0, :, :, 0]
-    
-    # Guardar la máscara como PNG
-    output_path = 'predicted_mask.png'
-    plt.imsave(output_path, predicted_mask, cmap='gray')
+    predicted_mask = (prediction > 0.5).astype(np.uint8)
 
-    # Leer la imagen binaria como bytes
-    buffered = io.BytesIO()
-    Image.fromarray(predicted_mask * 255).save(buffered, format="PNG")
-    binary_image_bytes = buffered.getvalue()
-    
-    # Medir el ancho de la grieta
-    crack_widths, max_crack_width = crack_width_measure(predicted_mask)
+    # Convertir la máscara predicha a una imagen binaria
+    binary_image_array = predicted_mask[0, :, :, 0]
 
+    # Procesar y medir el ancho de la grieta
+    crack_widths, max_crack_width = process_and_measure_crack(binary_image_array)
+
+    # Devolver los resultados
     return JSONResponse(content={"max_crack_width": max_crack_width})
-
-# Cargar y procesar la imagen
-img_path = 'c:/Users/USUARIO/Documents/Segmentation/ejemplopostman.jpg'
-
-# Procesar y medir el ancho de grieta directamente en Python
-def process_and_measure_crack(image_path):
-    # Cargar la imagen
-    image = Image.open(image_path).convert('L')  # Convertir a escala de grises
-    
-    # Convertir imagen a array de numpy
-    image_array = np.array(image)
-    
-    # Aplicar umbral para crear una imagen binaria
-    threshold = 128
-    binary_image_array = (image_array > threshold).astype(np.uint8)
-    
-    # Medir el ancho de la grieta
-    crack_widths, max_crack_width = crack_width_measure(binary_image_array)
-    
-    return crack_widths, max_crack_width
-
-
-
-# Procesar y medir el ancho de grieta directamente en Python
-def process_and_measure_crack(image_path):
-    # Cargar la imagen
-    image = Image.open(image_path).convert('L')  # Convertir a escala de grises
-    
-    # Convertir imagen a array de numpy
-    image_array = np.array(image)
-    
-    # Aplicar umbral para crear una imagen binaria
-    threshold = 128
-    binary_image_array = (image_array > threshold).astype(np.uint8)
-    
-    # Medir el ancho de la grieta
-    crack_widths, max_crack_width = crack_width_measure(binary_image_array)
-    
-    return crack_widths, max_crack_width
 
 # Function to detect circles
 def detect_and_measure_circle(image: np.ndarray):
