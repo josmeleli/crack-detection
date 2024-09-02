@@ -28,6 +28,10 @@ class FixedDropout(tf.keras.layers.Dropout):
 model_path = 'C:/Users/USUARIO/Desktop/docmodelskaggle/SemanticSegmentationTrainEvalmixup/model_effnetB1_512pix_fold3_full_84283.h5'
 model = load_model(model_path, custom_objects={'FixedDropout': FixedDropout}, compile=False)
 
+# Cargar el modelo de clasificación
+classification_model_path = 'c:/Users/USUARIO/Desktop/docmodelskaggle/SemanticSegmentationTrainEvalmixup/CNN_surface_crack_detection.h5'
+classification_model = tf.keras.models.load_model(classification_model_path)
+
 # Función para medir el ancho de las grietas
 def crack_width_measure(binary_image):
     binary_image = binary_image > 0
@@ -41,6 +45,15 @@ def crack_width_measure(binary_image):
 def process_and_measure_crack(binary_image_array):
     crack_widths, max_crack_width = crack_width_measure(binary_image_array)
     return crack_widths, max_crack_width
+
+def load_and_preprocess_image(img_path):
+    img = load_img(img_path, target_size=(120, 120))
+    img_array = img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0)
+    img_array /= 255.0
+    return img_array
+
+
 
 # Endpoint POST para procesar la imagen
 @app.post("/predict/")
@@ -131,7 +144,27 @@ async def detect_circles_endpoint(file: UploadFile = File(...)):
         return JSONResponse(content={"message": f"El diámetro del círculo es {diameter} píxeles"})
     else:
         return JSONResponse(content={"message": "No se detectaron círculos."})
+    
 
+
+@app.post("/classify/")
+async def classify(file: UploadFile = File(...)):
+    contents = await file.read()
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_image:
+        temp_image.write(contents)
+        temp_image_path = temp_image.name
+
+    img_array = load_and_preprocess_image(temp_image_path)
+
+    prediction = classification_model.predict(img_array)
+
+    threshold = 0.5
+
+    if prediction[0] > threshold:
+        return JSONResponse(content={"prediction": "Crack Detected"})
+    else:
+        return JSONResponse(content={"prediction": "No Crack Detected"})
 
 
 # Run the application
