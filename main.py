@@ -27,11 +27,11 @@ class FixedDropout(tf.keras.layers.Dropout):
         config = super(FixedDropout, self).get_config()
         return config
 
-model_path = 'C:/Users/USUARIO/Desktop/docmodelskaggle/SemanticSegmentationTrainEvalmixup/model_effnetB1_512pix_fold3_full_84283.h5'
+model_path = 'models\model_effnetB1_512pix_fold3_full_84283.h5'
 model = load_model(model_path, custom_objects={'FixedDropout': FixedDropout}, compile=False)
 
 # Cargar el modelo de clasificación
-classification_model_path = 'c:/Users/USUARIO/Desktop/docmodelskaggle/SemanticSegmentationTrainEvalmixup/CNN_surface_crack_detection.h5'
+classification_model_path = 'models\CNN_surface_crack_detection.h5'
 classification_model = tf.keras.models.load_model(classification_model_path)
 
 # Función para medir el ancho de las grietas
@@ -134,7 +134,7 @@ async def predict(file: UploadFile = File(...)):
     crack_widths, max_crack_width, highlighted_image_base64 = crack_width_measure(binary_image_array)
 
     # Devolver los resultados
-    return JSONResponse(content={"max_crack_width": max_crack_width, "image": highlighted_image_base64})
+    return JSONResponse(content={"max_crack_width": max_crack_width, "max_width_image": highlighted_image_base64})
 
 # Function to detect circles
 def detect_and_measure_circle(image: np.ndarray):
