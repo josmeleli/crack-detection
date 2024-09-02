@@ -11,6 +11,8 @@ from PIL import Image
 import io
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
+import base64
+from io import BytesIO
 
 
 # Inicializa la aplicación FastAPI
@@ -33,18 +35,65 @@ classification_model_path = 'c:/Users/USUARIO/Desktop/docmodelskaggle/SemanticSe
 classification_model = tf.keras.models.load_model(classification_model_path)
 
 # Función para medir el ancho de las grietas
-def crack_width_measure(binary_image):
+def crack_width_measure(binary_image, display_results=True):
+    """
+    Measure the crack widths along its length and identify the maximum crack width in a binary image.
+    
+    :param binary_image: A 2D NumPy array representing the binary image (where the crack is represented as by white pixels).
+    :param display_results: If True, display the results.
+    :return: A tuple containing an array of crack widths and the maximum crack width.
+    """
+    # Ensuring the image being used is a binary image
     binary_image = binary_image > 0
+    
+    # Applying skeletonisation
     skeleton = morphology.skeletonize(binary_image)
+    
+    # Applying distance transform
     distance_transform = distance_transform_edt(binary_image)
-    crack_widths = distance_transform[skeleton] * 2
+    
+    # Measuring crack widths along the skeleton
+    crack_widths = distance_transform[skeleton]*2
+    
+    # Identifying maximum crack width in the image
     max_crack_width = np.max(crack_widths) if crack_widths.size > 0 else 0
-    return crack_widths, max_crack_width
+    
+    if display_results:
+        # Display the crack widths along the skeleton
+        plt.figure(figsize=(6, 6))
+        plt.imshow(binary_image, cmap='gray')
+        plt.scatter(*np.where(skeleton)[::-1], c=crack_widths, cmap='jet', s=10, label='Crack Widths')
+        plt.colorbar(label='Ancho Máximo en (pixels)')
+        plt.title('Grieta con Ancho Máximo')
+        plt.axis('off')
+        
+        # Print value of max crack width
+        print(f"Ancho máximo de grieta: {max_crack_width} pixels")
+        
+        text_x = 10  # 10 pixels from the left
+        text_y = 20  # 20 pixels from the top
+        
+        plt.text(text_x, text_y, f"Max Width: {max_crack_width:.2f} pixels", color='white')
+        
+        # Guardar la imagen en memoria en lugar de en el disco
+        buf = BytesIO()
+        plt.savefig(buf, format='jpg', dpi=300)
+        buf.seek(0)
+        plt.close()
+        
+        # Convertir la imagen a base64
+        image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        buf.close()
+        
+        return crack_widths, max_crack_width, image_base64
+    
+    return crack_widths, max_crack_width, None
 
 # Función para convertir la imagen a binaria y medir el ancho de la grieta
 def process_and_measure_crack(binary_image_array):
-    crack_widths, max_crack_width = crack_width_measure(binary_image_array)
-    return crack_widths, max_crack_width
+    crack_widths, max_crack_width, image_base64 = crack_width_measure(binary_image_array)
+    return crack_widths, max_crack_width, image_base64
+
 
 def load_and_preprocess_image(img_path):
     img = load_img(img_path, target_size=(120, 120))
@@ -82,10 +131,10 @@ async def predict(file: UploadFile = File(...)):
     binary_image_array = predicted_mask[0, :, :, 0]
 
     # Procesar y medir el ancho de la grieta
-    crack_widths, max_crack_width = process_and_measure_crack(binary_image_array)
+    crack_widths, max_crack_width, highlighted_image_base64 = crack_width_measure(binary_image_array)
 
     # Devolver los resultados
-    return JSONResponse(content={"max_crack_width": max_crack_width})
+    return JSONResponse(content={"max_crack_width": max_crack_width, "image": highlighted_image_base64})
 
 # Function to detect circles
 def detect_and_measure_circle(image: np.ndarray):
